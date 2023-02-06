@@ -96,17 +96,14 @@ app.UseHangfireServer();
         }));
 ````
     
-
-SlidingInvisibilityTimeout is used to indicate how long a BackgroundJob execution is allowed to run for without status change (success/failure) before Hangfire decides the BackgroundJob execution was not successful and needs to be made visible to the HangfireServer for processing again. The idea being that if a HangfireServer starts processing a BackgroundJob and then gets killed without being able to report back that the BackgroundJob failed then there would need to be a retry of that BackgroundJob.
-
+----
+> SlidingInvisibilityTimeout is used to indicate how long a BackgroundJob execution is allowed to run for without status change (success/failure) before Hangfire decides the BackgroundJob execution was not successful and needs to be made visible to the HangfireServer for processing again. The idea being that if a HangfireServer starts processing a BackgroundJob and then gets killed without being able to report back that the BackgroundJob failed then there would need to be a retry of that BackgroundJob.
 You probably shouldn’t change SlidingInvisibilityTimeout unless you have a really compelling reason. For example, if you set it to 5 minutes and then have a BackgroundJob that runs for 6 minutes, Hangfire is going to end up queuing up multiple instances of that BackgroundJob because it hasn’t completed fast enough.
 
-QueuePollInterval is how long the server is going to wait in between checking the database for new BackgroundJobs to process. Setting this value will result in Jobs being picked up off the queue faster, but also more load on your SQL Server.
-
-
+> QueuePollInterval is how long the server is going to wait in between checking the database for new BackgroundJobs to process. Setting this value will result in Jobs being picked up off the queue faster, but also more load on your SQL Server.
 This will disable global locks, which will prevent multiple Hangfire servers from processing the same job simultaneously. By setting QueuePollInterval to TimeSpan.Zero, the servers will not poll the queue at the same time, effectively preventing concurrent execution.
 
-
+----
 Also, you can use the DisableConcurrentExecution attribute to prevent multiple instances of the same job from running simultaneously. To use this attribute, simply apply it to the method that represents the background job:
 ````c#
     [DisableConcurrentExecution(timeoutInSeconds: 3600)]
@@ -116,3 +113,5 @@ Also, you can use the DisableConcurrentExecution attribute to prevent multiple i
     }
 ````
 In this example, the MyJob method is decorated with the DisableConcurrentExecution attribute and set to have a timeout of 3600 seconds (1 hour). This means that if another instance of MyJob is already running, any subsequent calls to this job will be placed in a separate queue and will wait for the first instance to finish before starting. The timeout value ensures that the lock is automatically released if the first instance takes longer than 1 hour to complete.
+
+For more information about DisableConcurrentExecution [hangfire.io](https://docs.hangfire.io/en/latest/background-processing/throttling.html?highlight=disableconcurrentexecution)
