@@ -118,3 +118,32 @@ Also, you can use the **DisableConcurrentExecution** attribute to prevent multip
 In this example, the MyJob method is decorated with the DisableConcurrentExecution attribute and set to have a timeout of 3600 seconds (1 hour). This means that if another instance of MyJob is already running, any subsequent calls to this job will be placed in a separate queue and will wait for the first instance to finish before starting. The timeout value ensures that the lock is automatically released if the first instance takes longer than 1 hour to complete.
 
 For more information about DisableConcurrentExecution [hangfire.io](https://docs.hangfire.io/en/latest/background-processing/throttling.html?highlight=disableconcurrentexecution)
+
+
+
+##Best Practices
+
+**Make your background methods reentrant**
+
+Reentrancy means that a method can be interrupted in the middle of its execution and then safely called again. The interruption can be caused by many different things (i.e. exceptions, server shut-down), and Hangfire will attempt to retry processing many times.
+
+You can have many problems, if you don’t prepare your jobs to be reentrant. For example, if you are using an email sending background job and experience an error with your SMTP service, you can end with multiple emails sent to the addressee.
+
+**Instead of doing this:**
+````c#
+public void Method()
+{
+    _emailService.Send("person@example.com", "Hello!");
+}
+````
+**Consider doing this:**
+````c#
+public void Method(int deliveryId)
+{
+    if (_emailService.IsNotDelivered(deliveryId))
+    {
+        _emailService.Send("person@example.com", "Hello!");
+        _emailService.SetDelivered(deliveryId);
+    }
+}
+````
