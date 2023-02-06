@@ -121,7 +121,7 @@ For more information about DisableConcurrentExecution [hangfire.io](https://docs
 
 
 
-##Best Practices
+# Best Practices
 
 **Make your background methods reentrant**
 
