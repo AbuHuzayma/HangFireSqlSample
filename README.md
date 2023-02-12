@@ -107,18 +107,53 @@ You probably shouldn’t change SlidingInvisibilityTimeout unless you have a rea
 **This will disable global locks, which will prevent multiple Hangfire servers from processing the same job simultaneously. By setting QueuePollInterval to TimeSpan.Zero, the servers will not poll the queue at the same time, effectively preventing concurrent execution**.
 
 ----
-Also, you can use the **DisableConcurrentExecution** attribute to prevent multiple instances of the same job from running simultaneously. To use this attribute, simply apply it to the method that represents the background job:
+Also, you can use the **SkipConcurrentExecutionAttribute** custom attribute to prevent multiple instances of the same job from running simultaneously. To use this attribute, simply apply this class in your application and add it to the method that represents the background job:
 ````c#
-    [DisableConcurrentExecution(timeoutInSeconds: 3600)]
-    public static void MyJob()
+    public class SkipConcurrentExecutionAttribute : JobFilterAttribute, IServerFilter, IElectStateFilter
     {
-        // Job logic goes here.
+        private readonly int _timeoutSeconds;
+        private const string DistributedLock = "DistributedLock";
+
+        public SkipConcurrentExecutionAttribute(int timeOutSeconds)
+        {
+            if (timeOutSeconds < 0) throw new ArgumentException("Timeout argument value should be greater that zero.");
+            this._timeoutSeconds = timeOutSeconds;
+        }
+        public void OnPerformed(PerformedContext filterContext)
+        {
+            if (!filterContext.Items.ContainsKey(DistributedLock))
+                throw new InvalidOperationException("Can not release a distributed lock: it was not acquired.");
+
+            var distributedLock = (IDisposable)filterContext.Items[DistributedLock];
+            distributedLock?.Dispose();
+        }
+
+        public void OnPerforming(PerformingContext filterContext)
+        {
+            var resource = String.Format(
+                               "{0}.{1}",
+                              filterContext.BackgroundJob.Job.Type.FullName,
+                              filterContext.BackgroundJob.Job.Method.Name);
+
+            var timeOut = TimeSpan.FromSeconds(_timeoutSeconds);
+            try
+            {
+                var distributedLock = filterContext.Connection.AcquireDistributedLock(resource, timeOut);
+                filterContext.Items[DistributedLock] = distributedLock;
+            }
+            catch { filterContext.Canceled = true; }
+        }
+
+        public void OnStateElection(ElectStateContext context)
+        {
+            //if (context.CandidateState as FailedState != null)
+            //{
+
+            //}
+        }
     }
 ````
-In this example, the MyJob method is decorated with the DisableConcurrentExecution attribute and set to have a timeout of 3600 seconds (1 hour). This means that if another instance of MyJob is already running, any subsequent calls to this job will be placed in a separate queue and will wait for the first instance to finish before starting. The timeout value ensures that the lock is automatically released if the first instance takes longer than 1 hour to complete.
-
-For more information about DisableConcurrentExecution [hangfire.io](https://docs.hangfire.io/en/latest/background-processing/throttling.html?highlight=disableconcurrentexecution)
-
+In this example, create attribute and set to have a timeout of 0 seconds . This means that if another instance of MyJob is already running, any subsequent calls to this job will be placed in a separate queue and will wait for the first instance to finish before starting. 
 
 
 # Best Practices
